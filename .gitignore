@@ -1,0 +1,29 @@
+# --- Données et Modèles (Trop lourds pour Git) ---
+data/
+*.pth
+*.pth.tar
+*.onnx
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+
+# --- Logs et Résultats ---
+*.log
+*.err
+resultat_*.log
+erreur_*.err
+
+# --- Images et Visualisations (Optionnel) ---
+# Garde cette ligne si tu veux envoyer tes graphiques sur Git. 
+# Supprime-la si tu préfères ne pas les uploader.
+# *.png
+# *.pdf
+
+# --- Système ---
+.DS_Store
+.vscode/
