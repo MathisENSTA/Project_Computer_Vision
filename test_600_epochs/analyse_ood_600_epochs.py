@@ -4,7 +4,8 @@ import torchvision
 import torchvision.transforms as transforms
 import torchvision.models as models
 import numpy as np
-from sklearn.metrics import roc_auc_score
+import matplotlib.pyplot as plt
+from sklearn.metrics import roc_auc_score, roc_curve
 
 # ==========================================
 # 1. CONFIGURATION ET MODÈLE
@@ -12,12 +13,13 @@ from sklearn.metrics import roc_auc_score
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def get_model():
+    # Architecture exacte pour CIFAR-100
     model = models.resnet18(num_classes=100)
     model.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
     model.maxpool = nn.Identity()
     return model
 
-print("Chargement du modèle...")
+print("--- Chargement du modèle et des poids ---")
 model = get_model()
 state_dict = torch.load('model_resnet18_final_600_epochs.pth', map_location=device)
 model.load_state_dict(state_dict)
@@ -32,78 +34,97 @@ transform = transforms.Compose([
     transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))
 ])
 
-print("Chargement des données ID (CIFAR-100)...")
+print("--- Préparation des données ---")
+# In-Distribution (CIFAR-100)
 testset_id = torchvision.datasets.CIFAR100(root='./data', train=False, download=True, transform=transform)
 testloader = torch.utils.data.DataLoader(testset_id, batch_size=128, shuffle=False)
 
-print("Chargement des données OOD (SVHN)...")
+# Out-of-Distribution (SVHN)
 testset_ood = torchvision.datasets.SVHN(root='./data', split='test', download=True, transform=transform)
 ood_loader = torch.utils.data.DataLoader(testset_ood, batch_size=128, shuffle=False)
 
 # ==========================================
-# 3. FONCTIONS DE SCORING OOD
+# 3. CALCUL DES SCORES OOD
 # ==========================================
 def get_scores(model, loader, method='msp'):
     all_scores = []
-    # Pour ViM et Mahalanobis, on aurait besoin d'extraire les features
-    # Ici, nous utilisons une couche d'identité pour intercepter les features
-    # On sauvegarde la couche fc originale
-    original_fc = model.fc
-    
     with torch.no_grad():
         for images, _ in loader:
             images = images.to(device)
-            
-            # Récupération des Logits
             logits = model(images)
             
             if method == 'msp':
-                # Max Softmax Probability (plus c'est haut, plus c'est ID)
+                # Plus la probabilité max est élevée, plus c'est "In-Distribution"
                 probs = torch.softmax(logits, dim=1)
                 score = torch.max(probs, dim=1)[0]
                 
             elif method == 'logit':
-                # Max Logit Score
+                # Utilise simplement la valeur brute du logit max
                 score = torch.max(logits, dim=1)[0]
                 
             elif method == 'energy':
-                # Energy Score (T=1) : log(sum(exp(logits)))
+                # Energy score : log(sum(exp(logits)))
+                # Un score élevé indique une donnée In-Distribution
                 score = torch.logsumexp(logits, dim=1)
                 
             elif method == 'mahalanobis':
-                # Version simplifiée : distance à l'origine (négative car score élevé = ID)
+                # Approximation par la norme L2 des logits (négative)
                 score = -torch.norm(logits, p=2, dim=1)
 
             elif method == 'vim':
-                # Version simplifiée du Virtual Logit Matching
-                # On combine l'énergie et la norme des logits
+                # Version simplifiée combinant Logits et Énergie
                 energy = torch.logsumexp(logits, dim=1)
                 norm = torch.norm(logits, p=2, dim=1)
-                score = energy + 0.1 * norm # Approximation ViM
+                score = energy + 0.05 * norm 
                 
             all_scores.append(score.cpu().numpy())
             
     return np.concatenate(all_scores)
 
 # ==========================================
-# 4. COMPARAISON ET MÉTRIQUES (AUROC)
+# 4. ANALYSE ET GRAPHIQUES
 # ==========================================
-def compute_auroc(id_scores, ood_scores):
-    # En OOD, 1 = In-Distribution, 0 = Out-of-Distribution
-    y_true = np.array([1] * len(id_scores) + [0] * len(ood_scores))
-    y_scores = np.concatenate([id_scores, ood_scores])
-    return roc_auc_score(y_true, y_scores)
-
 methods = ['msp', 'logit', 'energy', 'mahalanobis', 'vim']
-print("\n" + "="*40)
-print(f"{'Méthode':<15} | {'AUROC Score':<12}")
-print("-" * 40)
+all_results = {}
 
+print("\nCalcul des scores pour chaque méthode...")
 for m in methods:
     id_s = get_scores(model, testloader, method=m)
     ood_s = get_scores(model, ood_loader, method=m)
-    auroc = compute_auroc(id_s, ood_s)
-    print(f"{m.upper():<15} | {auroc:.4f}")
+    all_results[m] = {'id': id_s, 'ood': ood_s}
+    
+    auroc = roc_auc_score([1]*len(id_s) + [0]*len(ood_s), np.concatenate([id_s, ood_s]))
+    print(f"Méthode {m.upper():12} | AUROC: {auroc:.4f}")
 
-print("="*40)
-print("Note: Un AUROC de 0.5 est aléatoire, 1.0 est parfait.")
+# --- Tracé des Courbes ---
+print("\nGénération des graphiques...")
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
+
+# 1. Courbes ROC
+
+for name, scores in all_results.items():
+    y_true = np.array([1] * len(scores['id']) + [0] * len(scores['ood']))
+    y_scores = np.concatenate([scores['id'], scores['ood']])
+    fpr, tpr, _ = roc_curve(y_true, y_scores)
+    ax1.plot(fpr, tpr, label=f'{name.upper()} (AUROC={roc_auc_score(y_true, y_scores):.3f})')
+
+ax1.plot([0, 1], [0, 1], 'k--', alpha=0.5)
+ax1.set_xlabel('Taux de Faux Positifs (FPR)')
+ax1.set_ylabel('Taux de Vrais Positifs (TPR)')
+ax1.set_title('Comparaison des Courbes ROC')
+ax1.legend()
+ax1.grid(alpha=0.3)
+
+# 2. Histogramme (Comparaison ID vs OOD pour la méthode Energy)
+
+method_to_plot = 'energy'
+ax2.hist(all_results[method_to_plot]['id'], bins=50, alpha=0.6, label='ID (CIFAR-100)', density=True, color='blue')
+ax2.hist(all_results[method_to_plot]['ood'], bins=50, alpha=0.6, label='OOD (SVHN)', density=True, color='red')
+ax2.set_title(f'Distribution des scores : {method_to_plot.upper()}')
+ax2.set_xlabel('Valeur du Score')
+ax2.set_ylabel('Densité')
+ax2.legend()
+
+plt.tight_layout()
+plt.savefig('analyse_ood_600_epochs.png', dpi=300)
+print("Graphique sauvegardé sous 'analyse_ood_600_epochs.png'")

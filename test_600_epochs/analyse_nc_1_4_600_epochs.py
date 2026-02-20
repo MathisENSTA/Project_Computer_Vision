@@ -166,5 +166,5 @@ plt.xlabel("Dimension T-SNE 1")
 plt.ylabel("Dimension T-SNE 2")
 plt.grid(True, linestyle='--', alpha=0.5)
 
-plt.savefig('visualisation_neural_collapse_600_epochs.png', dpi=300)
-print("Graphique sauvegardé sous : visualisation_neural_collapse_600_epochs.png")
+plt.savefig('analyse_nc_1_4_600_epochs.png', dpi=300)
+print("Graphique sauvegardé sous : analyse_nc_1_4_600_epochs.png")
