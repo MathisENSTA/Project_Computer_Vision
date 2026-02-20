@@ -139,7 +139,7 @@ ax2.tick_params(axis='y', labelcolor=color)
 
 plt.title('Progression théorique du Neural Collapse post-convergence')
 fig.tight_layout()
-plt.savefig('evolution_theorique_nc_300_epochs.png')
+plt.savefig('evolution_theorique_nc_200_epochs.png')
 print("Graphique d'évolution sauvegardé.")
 
 
@@ -166,5 +166,5 @@ plt.xlabel("Dimension T-SNE 1")
 plt.ylabel("Dimension T-SNE 2")
 plt.grid(True, linestyle='--', alpha=0.5)
 
-plt.savefig('visualisation_neural_collapse.png', dpi=300)
-print("Graphique sauvegardé sous : visualisation_neural_collapse.png")
+plt.savefig('analyse_nc_1_4_200_epochs.png', dpi=300)
+print("Graphique sauvegardé sous : analyse_nc_1_4_200_epochs.png")

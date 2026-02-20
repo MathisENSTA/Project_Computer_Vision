@@ -18,7 +18,7 @@ def get_model():
     model.maxpool = nn.Identity()
     return model
 
-print("--- Chargement du modèle ---")
+print("Chargement du modèle")
 model = get_model()
 state_dict = torch.load('model_resnet18_final_200_epochs.pth', map_location=device)
 model.load_state_dict(state_dict)
@@ -33,14 +33,14 @@ transform = transforms.Compose([
     transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))
 ])
 
-print("--- Préparation des données de test ---")
+print("Préparation des données de test")
 testset = torchvision.datasets.CIFAR100(root='./data', train=False, download=True, transform=transform)
 testloader = torch.utils.data.DataLoader(testset, batch_size=128, shuffle=False)
 
 # ==========================================
 # 3. EXTRACTION DES FEATURES ET PRÉDICTIONS
 # ==========================================
-print("--- Extraction des caractéristiques et calcul NC5 ---")
+print("Extraction des caractéristiques et calcul NC5")
 all_features = []
 all_labels = []
 all_preds_model = []
@@ -119,7 +119,7 @@ def plot_nc5_results(acc_m, acc_n, agr):
                  f'{height:.2f}%', ha='center', va='bottom', fontsize=12, fontweight='bold')
 
     plt.grid(axis='y', linestyle='--', alpha=0.6)
-    plt.savefig('visualisation_nc5_200_epochs.png', dpi=300)
-    print("\nGraphique sauvegardé sous 'visualisation_nc5_200_epochs.png'")
+    plt.savefig('analyse_nc5_200_epochs.png', dpi=300)
+    print("\nGraphique sauvegardé sous 'analyse_nc5_200_epochs.png'")
 
 plot_nc5_results(accuracy_model, accuracy_ncc, agreement)
